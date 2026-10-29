@@ -29,7 +29,7 @@ footer{text-align:center;font-size:12px;color:#889;padding:20px}a.back{color:#17
 #callscr .who{text-align:center}#callscr .av{width:88px;height:88px;border-radius:50%;background:#1747b8;margin:10px auto;display:flex;align-items:center;justify-content:center;font-size:40px;position:relative}
 #callscr .av.ring::after{content:"";position:absolute;inset:-8px;border-radius:50%;border:3px solid #8fb4ff;animation:pulse 1.4s infinite}
 @keyframes pulse{0%{transform:scale(.9);opacity:1}100%{transform:scale(1.35);opacity:0}}
-#callscr .st{font-size:13px;color:#9fb0d0}#callscr .chat{flex:1;overflow:auto;margin:12px 0;min-height:0}
+#callscr .mic{display:none;margin:6px auto;padding:6px 14px;border-radius:20px;background:#0f9d58;color:#fff;font-weight:700;width:max-content;animation:micb 1s infinite alternate}@keyframes micb{from{opacity:1}to{opacity:.55}}#callscr .mic.on{display:block}#callscr .av.live{background:#0f9d58;box-shadow:0 0 0 6px rgba(15,157,88,.35)}#callscr .st{font-size:13px;color:#9fb0d0}#callscr .chat{flex:1;overflow:auto;margin:12px 0;min-height:0}
 #callscr .typ{display:none;gap:6px;margin-bottom:8px}#callscr .typ input{flex:1;background:#fff}
 #callscr .typ button{width:auto;margin:0}.hang{background:#d93025;color:#fff;border-radius:40px}
 .okbig{font-size:46px;text-align:center}
@@ -110,26 +110,34 @@ const CLIPS={"Hola, gracias por llamar a soporte. Veo su Xerox AltaLink C8130, s
 function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 function unlockAudio(){try{AUD.muted=false;AUD.src="audio/silence.mp3";const p=AUD.play();p&&p.catch(()=>{})}catch(_){}try{speechSynthesis.cancel()}catch(_){}}
 function stopRec(){return new Promise(r=>{const c=curRec;curRec=null;if(!c)return r();let d=false;const f=()=>{if(!d){d=true;r()}};try{c.onend=f;c.abort()}catch(_){f()}setTimeout(f,600)})}
-function playClip(src,t){return new Promise(r=>{let done=false;const f=()=>{if(done)return;done=true;clearTimeout(to);AUD.onended=AUD.onerror=null;r(true)};const to=setTimeout(f,2500+t.length*80);AUD.onended=f;AUD.onerror=()=>{clearTimeout(to);if(!done){done=true;r(false)}};try{AUD.pause();AUD.src=src;AUD.playbackRate=1;const p=AUD.play();p&&p.catch(()=>{if(!done){done=true;clearTimeout(to);r(false)}})}catch(_){done=true;clearTimeout(to);r(false)}})}
+function playClip(src){return new Promise(r=>{let done=false,to=null;const fin=ok=>{if(done)return;done=true;clearTimeout(to);AUD.onended=AUD.onerror=AUD.ontimeupdate=AUD.onloadedmetadata=null;r(ok)};
+const arm=()=>{const d=AUD.duration;if(isFinite(d)&&d>0){clearTimeout(to);to=setTimeout(()=>fin(true),Math.max(0,(d-AUD.currentTime-0.15)*1000)+400)}};
+to=setTimeout(()=>fin(true),15000);AUD.onloadedmetadata=arm;AUD.ontimeupdate=()=>{const d=AUD.duration;if(isFinite(d)&&d>0&&AUD.currentTime>=d-0.15)fin(true)};AUD.onended=()=>fin(true);AUD.onerror=()=>fin(false);
+try{AUD.pause();AUD.src=src;AUD.playbackRate=1;const p=AUD.play();p&&p.then(arm).catch(()=>fin(false))}catch(_){fin(false)}})}
 async function say(t){if(!callOn)return;speakingNow=true;await stopRec();addMsg("a","Soporte: "+t);st("Hablando…");await sleep(300);if(!callOn){speakingNow=false;return}
-if(CLIPS[t]){const ok=await playClip(CLIPS[t],t);if(ok){await sleep(250);speakingNow=false;return}}
+if(CLIPS[t]){const ok=await playClip(CLIPS[t]);if(ok){speakingNow=false;return}}
 await sayTTS(t)}
 function sayTTS(t){return new Promise(r=>{if(!callOn)return r();if(!("speechSynthesis"in window))return setTimeout(()=>{speakingNow=false;r()},900);
 const u=new SpeechSynthesisUtterance(t);u.lang="es-ES";u.rate=1.25;u.volume=1;const v=pickVoice();if(v){u.voice=v;u.lang=v.lang}window.__utts.push(u);if(window.__utts.length>20)window.__utts.shift();speakingNow=true;let done=false,started=false,t0=Date.now();const est=1500+t.length*75;
 const f=()=>{if(done)return;done=true;clearInterval(iv);setTimeout(()=>{speakingNow=false;r()},300)};u.onstart=()=>{started=true};u.onend=f;u.onerror=f;
 const iv=setInterval(()=>{if(!callOn)return f();if(speechSynthesis.speaking||speechSynthesis.pending)started=true;else if(started&&Date.now()-t0>800)f();else if(!started&&Date.now()-t0>3000)f();if(Date.now()-t0>est+2500)f()},250);try{speechSynthesis.resume()}catch(_){}speechSynthesis.speak(u)})}
-function waitSilence(){return new Promise(r=>{const c=()=>{if(!callOn||(!speakingNow&&!(window.speechSynthesis&&speechSynthesis.speaking)))setTimeout(r,300);else setTimeout(c,150)};c()})}
-async function listenVoice(){await waitSilence();if(!callOn)return null;return new Promise(res=>{const r=new SR();curRec=r;r.lang="es-VE";r.interimResults=true;r.maxAlternatives=1;let fin="",got=false;
-r.onresult=e=>{if(speakingNow||speechSynthesis.speaking)return;let s="";for(const x of e.results)s+=x[0].transcript;fin=s;st("Escuchando… "+s)};r.onerror=ev=>{if(ev.error==="language-not-supported"){r.lang="es-ES"}if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){useTyped=true}};
-r.onend=()=>{curRec=null;res(fin.trim()||null)};try{st("🎙️ Escuchando… hable ahora");r.start()}catch(_){res(null)}})}
+function waitSilence(){return new Promise(r=>{const c=()=>{if(!callOn||(!speakingNow&&!(window.speechSynthesis&&speechSynthesis.speaking)))r();else setTimeout(c,100)};c()})}
+function micOn(on){const m=$("#callscr .mic");if(m)m.classList.toggle("on",!!on);const a=$("#callscr .av");if(a)a.classList.toggle("live",!!on);if(on)st("🎙️ Escuchando… hable ahora")}
+function listenOnce(){return new Promise(res=>{const r=new SR();curRec=r;r.lang="es-VE";r.interimResults=true;r.maxAlternatives=1;let fin="",settled=false;const t0=Date.now();
+const done=v=>{if(settled)return;settled=true;clearTimeout(cap);micOn(false);if(curRec===r)curRec=null;res(v)};const cap=setTimeout(()=>{try{r.stop()}catch(_){}setTimeout(()=>done(fin.trim()||null),800)},12000);
+r.onaudiostart=r.onstart=()=>micOn(true);
+r.onresult=e=>{if(speakingNow)return;let s="";for(const x of e.results)s+=x[0].transcript;fin=s;st("🎙️ Escuchando… "+s)};
+r.onerror=ev=>{if(ev.error==="language-not-supported"){r.lang="es-ES"}if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){useTyped=true}};
+r.onend=()=>done(fin.trim()||null);st("Conectando micrófono…");try{r.start()}catch(_){done(null)}})}
+async function listenVoice(){await waitSilence();for(let k=0;k<3&&callOn&&!useTyped;k++){if(k)await sleep(250);const a=await listenOnce();if(a)return a}return null}
 let useTyped=!SR;
 function listenTyped(){return new Promise(res=>{const b=$("#callscr .typ");b.style.display="flex";const i=b.querySelector("input");i.value="";i.focus();st("Escriba su respuesta");typedRes=v=>{b.style.display="none";res(v)}})}
-async function ask(q,tries=2){for(let k=0;k<tries&&callOn;k++){await say(k?"Disculpe, no le escuché bien. "+q:q);if(!callOn)return null;let a=useTyped?await listenTyped():await listenVoice();if(!a&&!useTyped&&callOn&&k===tries-1){useTyped=true;await say("Puede escribir su respuesta.");a=await listenTyped()}if(a){addMsg("u","Usted: "+a);return a}}return null}
+async function ask(q){await say(q);if(!callOn)return null;let a=useTyped?await listenTyped():await listenVoice();if(!a&&callOn&&!useTyped){useTyped=true;await say("Puede escribir su respuesta.");if(!callOn)return null;a=await listenTyped()}if(a){addMsg("u","Usted: "+a);return a}return null}
 function urgOf(a){a=(a||"").toLowerCase();if(/cr[ií]tic|detenid|parad|no funciona|no enciende|urgent[ií]simo/.test(a))return 2;if(/alta|urgent|pronto|r[aá]pid|hoy/.test(a))return 1;return 0}
 function tipoOf(a){a=a.toLowerCase();if(/atasc|atora|papel|bandeja|fusor/.test(a))return 0;if(/raya|mancha|calidad|claro|oscur|color|borros/.test(a))return 1;if(/pantalla|c[oó]digo|error|mensaje/.test(a))return 2;if(/red|escane|correo|wifi|ip/.test(a))return 3;return -1}
 function fill(id,v){const el=$(id);if(el&&v!=null){el.value=v;el.style.borderColor="#0f9d58";el.style.background="#eefaf2"}}
 async function llamar(){const e=find(location.hash.split("/")[2]);if(!e)return;stopCall();callOn=true;useTyped=!SR;
-const d=document.createElement("div");d.id="callscr";d.innerHTML=`<div class="who"><div class="av ring">🎧</div><b>Soporte Kontext · ${e.modelo}</b><div class="st">Llamando…</div></div><div class="chat"></div>
+const d=document.createElement("div");d.id="callscr";d.innerHTML=`<div class="who"><div class="av ring">🎧</div><div class="mic">🎙️ Escuchando… hable ahora</div><b>Soporte Kontext · ${e.modelo}</b><div class="st">Llamando…</div></div><div class="chat"></div>
 <form class="typ" onsubmit="event.preventDefault();typedRes&&typedRes(this.querySelector('input').value.trim()||null)"><input placeholder="Escriba aquí…" enterkeyhint="send"><button class="btn pri">Enviar</button></form>
 <button class="btn hang" onclick="stopCall()">📵 Colgar</button>`;document.body.appendChild(d);
 unlockAudio();
