@@ -103,10 +103,15 @@ function stopCall(){callOn=false;try{curRec&&curRec.abort()}catch(_){}try{speech
 function st(t){const s=$("#callscr .st");if(s)s.textContent=t}
 function addMsg(c,t){const ch=$("#callscr .chat");if(ch){const p=document.createElement("p");p.className=c;p.textContent=t;ch.appendChild(p);ch.scrollTop=ch.scrollHeight}}
 function pickVoice(){const vs=speechSynthesis.getVoices();return vs.find(v=>/es[-_]VE/i.test(v.lang))||vs.find(v=>/es[-_](419|US|MX|CO)/i.test(v.lang))||vs.find(v=>/^es/i.test(v.lang))}
-function say(t){return new Promise(r=>{if(!callOn)return r();addMsg("a","Soporte: "+t);st("Hablando…");if(!("speechSynthesis"in window))return setTimeout(r,900);
+let speakingNow=false;
+function say(t){return new Promise(r=>{if(!callOn)return r();try{curRec&&curRec.abort()}catch(_){}addMsg("a","Soporte: "+t);st("Hablando…");if(!("speechSynthesis"in window))return setTimeout(r,900);
+const u=new SpeechSynthesisUtterance(t);u.lang="es-VE";u.rate=1.25;const v=pickVoice();if(v){u.voice=v;u.lang=v.lang}speakingNow=true;let done=false,started=false,t0=Date.now();
+const f=()=>{if(done)return;done=true;clearInterval(iv);setTimeout(()=>{speakingNow=false;r()},300)};u.onstart=()=>{started=true};u.onend=f;u.onerror=f;
+const iv=setInterval(()=>{if(!callOn)return f();if(speechSynthesis.speaking||speechSynthesis.pending)started=true;else if(started||Date.now()-t0>2500)f();if(Date.now()-t0>4000+t.length*120)f()},250);speechSynthesis.speak(u)})}
+function waitSilence(){return new Promise(r=>{const c=()=>{if(!callOn||(!speakingNow&&!(window.speechSynthesis&&speechSynthesis.speaking)))setTimeout(r,300);else setTimeout(c,150)};c()})}
 const u=new SpeechSynthesisUtterance(t);u.lang="es-VE";const v=pickVoice();if(v){u.voice=v;u.lang=v.lang}let done=false;const f=()=>{if(!done){done=true;r()}};u.onend=f;u.onerror=f;speechSynthesis.speak(u);setTimeout(f,1500+t.length*90)})}
-function listenVoice(){return new Promise(res=>{const r=new SR();curRec=r;r.lang="es-VE";r.interimResults=true;r.maxAlternatives=1;let fin="",got=false;
-r.onresult=e=>{let s="";for(const x of e.results)s+=x[0].transcript;fin=s;st("Escuchando… "+s)};r.onerror=ev=>{if(ev.error==="language-not-supported"){r.lang="es-ES"}if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){useTyped=true}};
+async function listenVoice(){await waitSilence();if(!callOn)return null;return new Promise(res=>{const r=new SR();curRec=r;r.lang="es-VE";r.interimResults=true;r.maxAlternatives=1;let fin="",got=false;
+r.onresult=e=>{if(speakingNow||speechSynthesis.speaking)return;let s="";for(const x of e.results)s+=x[0].transcript;fin=s;st("Escuchando… "+s)};r.onerror=ev=>{if(ev.error==="language-not-supported"){r.lang="es-ES"}if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){useTyped=true}};
 r.onend=()=>{curRec=null;res(fin.trim()||null)};try{st("🎙️ Escuchando… hable ahora");r.start()}catch(_){res(null)}})}
 let useTyped=!SR;
 function listenTyped(){return new Promise(res=>{const b=$("#callscr .typ");b.style.display="flex";const i=b.querySelector("input");i.value="";i.focus();st("Escriba su respuesta");typedRes=v=>{b.style.display="none";res(v)}})}
