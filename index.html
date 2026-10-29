@@ -22,6 +22,16 @@ input[readonly]{background:#f0f0f4;color:#444}textarea{min-height:90px;backgroun
 .qty{display:flex;gap:6px;align-items:center}.qty button{width:30px;height:30px;border-radius:8px;border:1px solid #ccd;background:#fff}
 .chat{background:#0e1525;color:#e8ecf5;border-radius:14px;padding:12px;min-height:140px;font-size:14px}.chat p{margin:6px 0}.chat .a{color:#8fb4ff}.chat .u{color:#9be7b5}
 footer{text-align:center;font-size:12px;color:#889;padding:20px}a.back{color:#1747b8;font-size:14px;text-decoration:none;cursor:pointer}
+.sticky{position:fixed;left:0;right:0;bottom:0;z-index:50;background:rgba(255,255,255,.96);backdrop-filter:blur(6px);box-shadow:0 -4px 16px rgba(20,40,90,.12);padding:8px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px}
+.sticky .btn{margin-top:0}.padb{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+.call{background:#0f9d58;color:#fff}
+#callscr{position:fixed;inset:0;z-index:100;background:linear-gradient(#0b1630,#0e1525);color:#e8ecf5;display:flex;flex-direction:column;padding:calc(20px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+#callscr .who{text-align:center}#callscr .av{width:88px;height:88px;border-radius:50%;background:#1747b8;margin:10px auto;display:flex;align-items:center;justify-content:center;font-size:40px;position:relative}
+#callscr .av.ring::after{content:"";position:absolute;inset:-8px;border-radius:50%;border:3px solid #8fb4ff;animation:pulse 1.4s infinite}
+@keyframes pulse{0%{transform:scale(.9);opacity:1}100%{transform:scale(1.35);opacity:0}}
+#callscr .st{font-size:13px;color:#9fb0d0}#callscr .chat{flex:1;overflow:auto;margin:12px 0;min-height:0}
+#callscr .typ{display:none;gap:6px;margin-bottom:8px}#callscr .typ input{flex:1;background:#fff}
+#callscr .typ button{width:auto;margin:0}.hang{background:#d93025;color:#fff;border-radius:40px}
 .okbig{font-size:46px;text-align:center}
 </style></head><body>
 <header><div class="logo">K</div><div><b>Kontext QRi</b><small>Pasaporte digital de equipos · Demo para Grupo XVen</small></div></header>
@@ -37,7 +47,7 @@ const $=s=>document.querySelector(s),app=$("#app");let cart={};
 const find=id=>EQ.find(e=>e.id===id);
 const col={K:"#222",C:"#00a3e0",M:"#d6007e",Y:"#f2c500"};
 function go(h){location.hash=h}
-function route(){const p=location.hash.replace(/^#\/?/,"").split("/");window.scrollTo(0,0);
+function route(){app.classList.remove("padb");stopCall&&stopCall();const p=location.hash.replace(/^#\/?/,"").split("/");window.scrollTo(0,0);
  if(p[0]==="equipo"&&find(p[1]))return pasaporte(find(p[1]));
  if(p[0]==="soporte"&&find(p[1]))return soporte(find(p[1]));
  if(p[0]==="insumos"&&find(p[1]))return insumos(find(p[1]));
@@ -60,13 +70,15 @@ function soporte(e){app.innerHTML=`<a class="back" onclick="go('#/equipo/${e.id}
 <h2>Nuevo ticket de soporte</h2><p class="muted">Datos del equipo prellenados desde el QR. Solo describa el problema.</p>
 ${ro("Cliente",e.cliente)}${ro("Equipo",e.modelo+" · "+e.serial)}${ro("Sede",e.sede)}${ro("Contrato / SLA",e.contrato+" · "+e.sla)}${ro("Contador",e.contador)}
 <label>Tipo</label><select id="tipo"><option>Falla / atasco</option><option>Calidad de impresión</option><option>Error en pantalla</option><option>Red / escaneo</option></select>
+<label>Urgencia</label><select id="urg"><option>Normal</option><option>Alta</option><option>Crítica (equipo detenido)</option></select>
 <label>Describa el problema *</label><textarea id="desc" placeholder="Ej.: atasco de papel en la bandeja 2…"></textarea>
-<button class="btn voice" onclick="voz()">🎙️ Hablar con asistente (Grok Voice · simulado)</button><div id="chat"></div>
-<button class="btn odoo" onclick="enviarTicket('${e.id}')">Crear ticket</button></div></div>`}
+<label>Nombre de contacto</label><input id="cnom" placeholder="Quién reporta">
+<label>Teléfono de contacto</label><input id="ctel" type="tel" placeholder="Ej.: 0412-0000000"></div></div>
+<div class="sticky"><button class="btn call" onclick="llamar()">📞 Llamar a soporte</button><button class="btn odoo" onclick="enviarTicket('${e.id}')">Crear ticket</button></div>`;app.classList.add("padb")}
 function enviarTicket(id){const e=find(id),d=$("#desc").value.trim();if(!d){$("#desc").focus();$("#desc").style.borderColor="#b3261e";return}
 const n="HD-DEMO-"+Math.floor(10000+Math.random()*89999),h=parseInt(e.sla)||4;const eta=new Date(Date.now()+h*3600e3);
 app.innerHTML=`<div class="card"><div class="okbig">✅</div><h1 style="text-align:center">Ticket ${n} creado</h1><dl>
-<dt>Equipo</dt><dd>${e.modelo} · ${e.serial}</dd><dt>Tipo</dt><dd>${$("#tipo")?.value||""}</dd><dt>Problema</dt><dd>${d.replace(/</g,"&lt;")}</dd>
+<dt>Equipo</dt><dd>${e.modelo} · ${e.serial}</dd><dt>Tipo</dt><dd>${$("#tipo")?.value||""}</dd><dt>Urgencia</dt><dd>${$("#urg")?.value||""}</dd><dt>Contacto</dt><dd>${(($("#cnom")?.value||"")+" "+($("#ctel")?.value||"")).replace(/</g,"&lt;")}</dd><dt>Problema</dt><dd>${d.replace(/</g,"&lt;")}</dd>
 <dt>Equipo asignado</dt><dd>Soporte SLA ${e.sla.split("(")[1]?.replace(")","")||""} – Región ${e.sede.split(/[–(]/).pop().replace(")","").trim()}</dd>
 <dt>Técnico</dt><dd>Técnico Demo #07</dd><dt>ETA</dt><dd>${eta.toLocaleString("es-VE",{weekday:"short",hour:"2-digit",minute:"2-digit"})} (SLA ${e.sla})</dd></dl>
 <p class="muted">Notificación enviada al cliente y al equipo (simulado). En producción: ticket real en Odoo Helpdesk vía conector Kontext.</p>
@@ -76,7 +88,7 @@ CONS[e.modelo].forEach(([s,n],i)=>{const m={negro:"K",cian:"C",magenta:"M",amari
 app.innerHTML=`<a class="back" onclick="go('#/equipo/${e.id}')">← Pasaporte</a><div class="card" style="margin-top:10px"><span class="tag">PORTAL DE COMPRAS · SIMULADO</span>
 <h2 style="margin-top:8px">Insumos compatibles – ${e.modelo}</h2><p class="muted">${e.cliente} · ${e.sede} · ${e.contrato}. Sugerencias según nivel de tóner. Códigos y precios ficticios (USD).</p>
 <div id="items"></div><h2 id="tot" style="text-align:right"></h2><label>Observaciones</label><input id="obs" placeholder="Opcional">
-<button class="btn ok" onclick="enviarPedido('${e.id}')">Enviar pedido</button></div>`;pintar(e)}
+</div><div class="sticky"><button class="btn ok" onclick="enviarPedido('${e.id}')">Enviar pedido</button></div>`;app.classList.add("padb");pintar(e)}
 function pintar(e){$("#items").innerHTML=CONS[e.modelo].map(([s,n,p])=>`<div class="item"><div><b>${n}</b><div class="muted">${s} · $${p}</div></div><div class="qty"><button onclick="q('${e.id}','${s}',-1)">−</button><b>${cart[s]}</b><button onclick="q('${e.id}','${s}',1)">+</button></div></div>`).join("");
 $("#tot").textContent="Total: $"+CONS[e.modelo].reduce((a,[s,,p])=>a+p*cart[s],0)}
 function q(id,s,d){cart[s]=Math.max(0,cart[s]+d);pintar(find(id))}
@@ -85,16 +97,35 @@ const t=it.reduce((a,[s,,p])=>a+p*cart[s],0),n="PO-DEMO-"+Math.floor(1000+Math.r
 app.innerHTML=`<div class="card"><div class="okbig">📦</div><h1 style="text-align:center">Pedido ${n} recibido</h1>${it.map(([s,nm,p])=>`<div class="item"><span>${cart[s]} × ${nm}</span><b>$${p*cart[s]}</b></div>`).join("")}
 <h2 style="text-align:right">Total: $${t}</h2><p class="muted">Entrega estimada: 24–48 h en ${e.sede}. Asociado a ${e.contrato}. (Simulado)</p>
 <button class="btn pri" onclick="go('#/equipo/${e.id}')">Volver al pasaporte</button></div>`}
-// Voz
-function say(t){return new Promise(r=>{addMsg("a","Asistente: "+t);if(!("speechSynthesis"in window))return setTimeout(r,1200);const u=new SpeechSynthesisUtterance(t);u.lang="es-ES";
-const v=speechSynthesis.getVoices().find(v=>v.lang.startsWith("es"));if(v)u.voice=v;u.onend=r;u.onerror=r;speechSynthesis.speak(u);setTimeout(r,8000)})}
-function addMsg(c,t){const ch=$("#chat .chat");if(ch){const p=document.createElement("p");p.className=c;p.textContent=t;ch.appendChild(p)}}
-function listen(){return new Promise((res,rej)=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return rej();const r=new SR();r.lang="es-VE";r.interimResults=false;
-r.onresult=e=>res(e.results[0][0].transcript);r.onerror=()=>rej();r.onend=()=>setTimeout(()=>rej(),300);try{r.start()}catch(e){rej()}})}
-async function voz(){$("#chat").innerHTML=`<div class="chat" style="margin-top:10px"><p>📞 Llamando al asistente Kontext…</p></div>`;
-const e=find(location.hash.split("/")[2]);await say(`Hola, soy el asistente de soporte. Veo su ${e.modelo}, serial ${e.serial}. ¿Qué problema presenta el equipo?`);
-let txt;try{addMsg("","🎙️ Escuchando…");txt=await listen();addMsg("u","Usted: "+txt)}catch(_){addMsg("","(Micrófono no disponible: conversación simulada)");
-txt="El equipo muestra un atasco de papel en la bandeja 2 y las copias salen con rayas grises.";await new Promise(r=>setTimeout(r,900));addMsg("u","Usuario (simulado): "+txt)}
-$("#desc").value=txt;await say("Entendido. Ya llené la descripción del ticket. Revise y pulse Crear ticket.");addMsg("","✅ Descripción completada por voz")}
+// Llamada de voz (Web Speech API, sin servidor)
+let callOn=false,curRec=null,typedRes=null;const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function stopCall(){callOn=false;try{curRec&&curRec.abort()}catch(_){}try{speechSynthesis.cancel()}catch(_){}const c=document.getElementById("callscr");if(c)c.remove();if(typedRes){typedRes(null);typedRes=null}}
+function st(t){const s=$("#callscr .st");if(s)s.textContent=t}
+function addMsg(c,t){const ch=$("#callscr .chat");if(ch){const p=document.createElement("p");p.className=c;p.textContent=t;ch.appendChild(p);ch.scrollTop=ch.scrollHeight}}
+function pickVoice(){const vs=speechSynthesis.getVoices();return vs.find(v=>/es[-_]VE/i.test(v.lang))||vs.find(v=>/es[-_](419|US|MX|CO)/i.test(v.lang))||vs.find(v=>/^es/i.test(v.lang))}
+function say(t){return new Promise(r=>{if(!callOn)return r();addMsg("a","Soporte: "+t);st("Hablando…");if(!("speechSynthesis"in window))return setTimeout(r,900);
+const u=new SpeechSynthesisUtterance(t);u.lang="es-VE";const v=pickVoice();if(v){u.voice=v;u.lang=v.lang}let done=false;const f=()=>{if(!done){done=true;r()}};u.onend=f;u.onerror=f;speechSynthesis.speak(u);setTimeout(f,1500+t.length*90)})}
+function listenVoice(){return new Promise(res=>{const r=new SR();curRec=r;r.lang="es-VE";r.interimResults=true;r.maxAlternatives=1;let fin="",got=false;
+r.onresult=e=>{let s="";for(const x of e.results)s+=x[0].transcript;fin=s;st("Escuchando… "+s)};r.onerror=ev=>{if(ev.error==="language-not-supported"){r.lang="es-ES"}if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){useTyped=true}};
+r.onend=()=>{curRec=null;res(fin.trim()||null)};try{st("🎙️ Escuchando… hable ahora");r.start()}catch(_){res(null)}})}
+let useTyped=!SR;
+function listenTyped(){return new Promise(res=>{const b=$("#callscr .typ");b.style.display="flex";const i=b.querySelector("input");i.value="";i.focus();st("Escriba su respuesta");typedRes=v=>{b.style.display="none";res(v)}})}
+async function ask(q,tries=2){for(let k=0;k<tries&&callOn;k++){await say(k?"Disculpe, no le escuché bien. "+q:q);if(!callOn)return null;let a=useTyped?await listenTyped():await listenVoice();if(!a&&!useTyped&&callOn&&k===tries-1){useTyped=true;await say("Puede escribir su respuesta.");a=await listenTyped()}if(a){addMsg("u","Usted: "+a);return a}}return null}
+function urgOf(a){a=(a||"").toLowerCase();if(/cr[ií]tic|detenid|parad|no funciona|no enciende|urgent[ií]simo/.test(a))return 2;if(/alta|urgent|pronto|r[aá]pid|hoy/.test(a))return 1;return 0}
+function tipoOf(a){a=a.toLowerCase();if(/atasc|atora|papel|bandeja|fusor/.test(a))return 0;if(/raya|mancha|calidad|claro|oscur|color|borros/.test(a))return 1;if(/pantalla|c[oó]digo|error|mensaje/.test(a))return 2;if(/red|escane|correo|wifi|ip/.test(a))return 3;return -1}
+function fill(id,v){const el=$(id);if(el&&v!=null){el.value=v;el.style.borderColor="#0f9d58";el.style.background="#eefaf2"}}
+async function llamar(){const e=find(location.hash.split("/")[2]);if(!e)return;stopCall();callOn=true;useTyped=!SR;
+const d=document.createElement("div");d.id="callscr";d.innerHTML=`<div class="who"><div class="av ring">🎧</div><b>Soporte Kontext · ${e.modelo}</b><div class="st">Llamando…</div></div><div class="chat"></div>
+<form class="typ" onsubmit="event.preventDefault();typedRes&&typedRes(this.querySelector('input').value.trim()||null)"><input placeholder="Escriba aquí…" enterkeyhint="send"><button class="btn pri">Enviar</button></form>
+<button class="btn hang" onclick="stopCall()">📵 Colgar</button>`;document.body.appendChild(d);
+if("speechSynthesis"in window){speechSynthesis.getVoices();try{speechSynthesis.cancel()}catch(_){}}
+await new Promise(r=>setTimeout(r,1300));if(!callOn)return;$("#callscr .av").classList.remove("ring");st("En llamada");
+const p=await ask(`Hola, gracias por llamar a soporte. Veo su ${e.modelo}, serial ${e.serial}, en ${e.sede}. ¿Qué problema presenta el equipo?`);if(!callOn)return;
+if(p){fill("#desc",p);const ti=tipoOf(p);if(ti>=0)$("#tipo").selectedIndex=ti}
+const u=await ask("Entendido. ¿Qué tan urgente es? ¿Normal, alta, o crítica porque el equipo está detenido?");if(!callOn)return;const ui=urgOf(u);$("#urg").selectedIndex=ui;fill("#urg",null);$("#urg").style.borderColor="#0f9d58";
+const n=await ask("¿A nombre de quién registro el reporte?");if(!callOn)return;if(n)fill("#cnom",n.replace(/^(me llamo|soy|mi nombre es|a nombre de)\s+/i,""));
+const t=await ask("¿Y a qué número de teléfono le contactamos?");if(!callOn)return;if(t)fill("#ctel",t.replace(/[^\d+]/g,"").replace(/^(\d{4})(\d{7})$/,"$1-$2")||t);
+await say(`Perfecto. Registré: ${p||"sin descripción"}. Urgencia ${["normal","alta","crítica"][ui]}. Contacto ${$("#cnom").value||"sin nombre"}. Ya completé el formulario; cuelgue y pulse Crear ticket para enviarlo. Hasta luego.`);
+if(callOn){st("Llamada finalizada");setTimeout(stopCall,1200)}}
 route();
 </script></body></html>
