@@ -102,12 +102,14 @@ let callOn=false,curRec=null,typedRes=null;const SR=window.SpeechRecognition||wi
 function stopCall(){callOn=false;try{curRec&&curRec.abort()}catch(_){}try{speechSynthesis.cancel()}catch(_){}const c=document.getElementById("callscr");if(c)c.remove();if(typedRes){typedRes(null);typedRes=null}}
 function st(t){const s=$("#callscr .st");if(s)s.textContent=t}
 function addMsg(c,t){const ch=$("#callscr .chat");if(ch){const p=document.createElement("p");p.className=c;p.textContent=t;ch.appendChild(p);ch.scrollTop=ch.scrollHeight}}
-function pickVoice(){const vs=speechSynthesis.getVoices();return vs.find(v=>/es[-_]VE/i.test(v.lang))||vs.find(v=>/es[-_](419|US|MX|CO)/i.test(v.lang))||vs.find(v=>/^es/i.test(v.lang))}
+let VOICES=[];function loadVoices(){try{VOICES=speechSynthesis.getVoices()||[]}catch(_){}}if("speechSynthesis"in window){loadVoices();try{speechSynthesis.addEventListener("voiceschanged",loadVoices)}catch(_){speechSynthesis.onvoiceschanged=loadVoices}}
+function pickVoice(){if(!VOICES.length)loadVoices();const vs=VOICES;return vs.find(v=>/es[-_]VE/i.test(v.lang))||vs.find(v=>/es[-_](ES|MX|US)/i.test(v.lang))||vs.find(v=>/es[-_](419|CO)/i.test(v.lang))||vs.find(v=>/^es/i.test(v.lang))}
+window.__utts=[];function unlockTTS(){if(!("speechSynthesis"in window))return;try{speechSynthesis.cancel();speechSynthesis.resume();const u=new SpeechSynthesisUtterance("Llamando");u.lang="es-ES";u.volume=0.01;u.rate=1.25;const v=pickVoice();if(v){u.voice=v;u.lang=v.lang}window.__utts.push(u);speechSynthesis.speak(u)}catch(_){}}
 let speakingNow=false;
-function say(t){return new Promise(r=>{if(!callOn)return r();try{curRec&&curRec.abort()}catch(_){}addMsg("a","Soporte: "+t);st("Hablando…");if(!("speechSynthesis"in window))return setTimeout(r,900);
-const u=new SpeechSynthesisUtterance(t);u.lang="es-VE";u.rate=1.25;const v=pickVoice();if(v){u.voice=v;u.lang=v.lang}speakingNow=true;let done=false,started=false,t0=Date.now();
+function say(t){return new Promise(r=>{if(!callOn)return r();try{curRec&&curRec.abort()}catch(_){}curRec=null;addMsg("a","Soporte: "+t);st("Hablando…");if(!("speechSynthesis"in window))return setTimeout(r,900);
+const u=new SpeechSynthesisUtterance(t);u.lang="es-ES";u.rate=1.25;u.volume=1;const v=pickVoice();if(v){u.voice=v;u.lang=v.lang}window.__utts.push(u);if(window.__utts.length>20)window.__utts.shift();speakingNow=true;let done=false,started=false,t0=Date.now();const est=1500+t.length*75;
 const f=()=>{if(done)return;done=true;clearInterval(iv);setTimeout(()=>{speakingNow=false;r()},300)};u.onstart=()=>{started=true};u.onend=f;u.onerror=f;
-const iv=setInterval(()=>{if(!callOn)return f();if(speechSynthesis.speaking||speechSynthesis.pending)started=true;else if(started||Date.now()-t0>2500)f();if(Date.now()-t0>4000+t.length*120)f()},250);speechSynthesis.speak(u)})}
+const iv=setInterval(()=>{if(!callOn)return f();if(speechSynthesis.speaking||speechSynthesis.pending)started=true;else if(started&&Date.now()-t0>800)f();else if(!started&&Date.now()-t0>3000)f();if(Date.now()-t0>est+2500)f()},250);try{speechSynthesis.resume()}catch(_){}speechSynthesis.speak(u)})}
 function waitSilence(){return new Promise(r=>{const c=()=>{if(!callOn||(!speakingNow&&!(window.speechSynthesis&&speechSynthesis.speaking)))setTimeout(r,300);else setTimeout(c,150)};c()})}
 async function listenVoice(){await waitSilence();if(!callOn)return null;return new Promise(res=>{const r=new SR();curRec=r;r.lang="es-VE";r.interimResults=true;r.maxAlternatives=1;let fin="",got=false;
 r.onresult=e=>{if(speakingNow||speechSynthesis.speaking)return;let s="";for(const x of e.results)s+=x[0].transcript;fin=s;st("Escuchando… "+s)};r.onerror=ev=>{if(ev.error==="language-not-supported"){r.lang="es-ES"}if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){useTyped=true}};
@@ -122,7 +124,7 @@ async function llamar(){const e=find(location.hash.split("/")[2]);if(!e)return;s
 const d=document.createElement("div");d.id="callscr";d.innerHTML=`<div class="who"><div class="av ring">🎧</div><b>Soporte Kontext · ${e.modelo}</b><div class="st">Llamando…</div></div><div class="chat"></div>
 <form class="typ" onsubmit="event.preventDefault();typedRes&&typedRes(this.querySelector('input').value.trim()||null)"><input placeholder="Escriba aquí…" enterkeyhint="send"><button class="btn pri">Enviar</button></form>
 <button class="btn hang" onclick="stopCall()">📵 Colgar</button>`;document.body.appendChild(d);
-if("speechSynthesis"in window){speechSynthesis.getVoices();try{speechSynthesis.cancel()}catch(_){}}
+unlockTTS();
 await new Promise(r=>setTimeout(r,1300));if(!callOn)return;$("#callscr .av").classList.remove("ring");st("En llamada");
 const p=await ask(`Hola, gracias por llamar a soporte. Veo su ${e.modelo}, serial ${e.serial}, en ${e.sede}. ¿Qué problema presenta el equipo?`);if(!callOn)return;
 if(p){fill("#desc",p);const ti=tipoOf(p);if(ti>=0)$("#tipo").selectedIndex=ti}
